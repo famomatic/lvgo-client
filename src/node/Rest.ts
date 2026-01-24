@@ -181,7 +181,7 @@ export class Rest {
 	 */
 	constructor(node: Node, options: NodeOption) {
 		this.node = node;
-		this.url = `${options.secure ? 'https' : 'http'}://${options.url}`;
+		this.url = `${options.secure ? 'https' : 'http'}://${options.url}/g1`;
 		this.auth = options.auth;
 	}
 

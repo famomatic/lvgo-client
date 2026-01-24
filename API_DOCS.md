@@ -1,11 +1,18 @@
 # Custom Media Engine API Documentation
 
-> **Status**: Final Specification (v1.0.0-Custom)
-> **Base URL**: `http://{host}:{port}` (No version prefix)
+> **Status**: Final Specification (Dual Mode: v4 & g1)
+> **Base URL (Custom)**: `http://{host}:{port}/g1`
+> **Base URL (Standard)**: `http://{host}:{port}/v4`
 > **Content-Type**: `application/json`
 
 This document serves as the **Single Source of Truth** for the Custom Media Engine API.
 All endpoints expect and return JSON unless otherwise stated.
+
+---
+
+# Part 1: Custom G1 API (`/g1`)
+
+The following endpoints are available under the `/g1` prefix.
 
 ---
 
@@ -14,7 +21,7 @@ All endpoints expect and return JSON unless otherwise stated.
 ### 1.1 Server Info
 Returns system version, build information, and environment details.
 
-- **GET** `/info`
+- **GET** `/g1/info`
 - **Response**: `200 OK`
 ```json
 {
@@ -32,7 +39,7 @@ Returns system version, build information, and environment details.
 ### 1.2 Track Resolution
 Resolves a search query or URL into loadable tracks.
 
-- **GET** `/tracks/resolve?identifier={identifier}`
+- **GET** `/g1/tracks/resolve?identifier={identifier}`
 - **Query Parameters**:
   - `identifier` (Required): URL or search query (e.g., `ytsearch:Hello`).
 - **Response**: `200 OK`
@@ -64,7 +71,7 @@ Resolves a search query or URL into loadable tracks.
 ### 1.3 Track Decoding
 Decodes a base64 encoded track string.
 
-- **GET** `/tracks/decode?encoded={base64}`
+- **GET** `/g1/tracks/decode?encoded={base64}`
 - **Response**: `200 OK` (Track Object or 400 Bad Request)
 
 ---
@@ -74,7 +81,7 @@ Decodes a base64 encoded track string.
 ### 2.1 Get Player
 Retrieves the current state of a player.
 
-- **GET** `/sessions/{sessionId}/players/{guildId}`
+- **GET** `/g1/sessions/{sessionId}/players/{guildId}`
 - **Response**: `200 OK`
 ```json
 {
@@ -91,12 +98,31 @@ Retrieves the current state of a player.
   "voice": { ... },
   "filters": { ... }
 }
+  "filters": { ... }
+}
+```
+
+### 2.2 Get Players (List)
+Retrieves a list of all players in the session.
+
+- **GET** `/g1/sessions/{sessionId}/players`
+- **Response**: `200 OK`
+```json
+[
+  {
+    "guildId": "123456789",
+    "track": { ... },
+    "volume": 100,
+    ...
+  },
+  ...
+]
 ```
 
 ### 2.2 Update Player (Play / Config)
 Updates the player configuration. Sending a `track` object will **Stop** the current track and **Play** the new one immediately (bypassing the queue, but keeping the queue intact).
 
-- **PATCH** `/sessions/{sessionId}/players/{guildId}`
+- **PATCH** `/g1/sessions/{sessionId}/players/{guildId}`
 - **Body**:
 ```json
 {
@@ -115,7 +141,7 @@ Updates the player configuration. Sending a `track` object will **Stop** the cur
 ### 2.3 Destroy Player
 Disconnects voice, deletes the player, **Clears Queue**, and **Clears History**.
 
-- **DELETE** `/sessions/{sessionId}/players/{guildId}`
+- **DELETE** `/g1/sessions/{sessionId}/players/{guildId}`
 - **Response**: `204 No Content`
 
 ---
@@ -128,7 +154,7 @@ Tracks flow: `Queue Head` -> `Player` -> `History`.
 ### 3.1 Get Queue
 Retrieves tracks currently waiting in the queue.
 
-- **GET** `/sessions/{sessionId}/players/{guildId}/queue`
+- **GET** `/g1/sessions/{sessionId}/players/{guildId}/queue`
 - **Query Parameters**:
   - `page` (default 1)
   - `limit` (default 50)
@@ -147,7 +173,7 @@ Retrieves tracks currently waiting in the queue.
 ### 3.2 Add to Queue
 Appends tracks to the **End** of the queue.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/queue`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/queue`
 - **Body**:
 ```json
 {
@@ -165,14 +191,14 @@ Appends tracks to the **End** of the queue.
 ### 3.3 Prepend to Queue (Play Next)
 Adds tracks to the **Start** of the queue. They will be played immediately after the current track finishes.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/queue/prepend`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/queue/prepend`
 - **Body**: `{ "tracks": [ ... ] }`
 - **Response**: `200 OK` `{ "added": 1, "queueLength": 15 }`
 
 ### 3.4 Move Track
 Moves a track from one index to another. Indices are 0-based.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/queue/move`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/queue/move`
 - **Body**:
 ```json
 {
@@ -185,7 +211,7 @@ Moves a track from one index to another. Indices are 0-based.
 ### 3.5 Swap Tracks
 Swaps the positions of two tracks.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/queue/swap`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/queue/swap`
 - **Body**: `{ "indexA": 2, "indexB": 5 }`
 - **Response**: `200 OK`
 
@@ -193,14 +219,14 @@ Swaps the positions of two tracks.
 Forces the current track to finish (Triggering `TrackEnd` -> `AutoPlay`).
 The next track in the queue (index 0) naturally starts playing.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/queue/skip`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/queue/skip`
 - **Body**: (Empty)
 - **Response**: `204 No Content`
 
 ### 3.7 Remove Range
 Removes a specific set of tracks from the queue.
 
-- **DELETE** `/sessions/{sessionId}/players/{guildId}/queue`
+- **DELETE** `/g1/sessions/{sessionId}/players/{guildId}/queue`
 - **Body**:
 ```json
 {
@@ -225,7 +251,7 @@ The server automatically maintains a history of played tracks in Redis (`history
 ### 4.1 Get History
 View previously played tracks. Index 0 is the most recently finished track.
 
-- **GET** `/sessions/{sessionId}/players/{guildId}/history`
+- **GET** `/g1/sessions/{sessionId}/players/{guildId}/history`
 - **Query**: `page`, `limit`
 - **Response**: `200 OK`
 ```json
@@ -241,7 +267,7 @@ View previously played tracks. Index 0 is the most recently finished track.
 ### 4.2 Replay / Add from History
 Convenience endpoint to take a track from history and queue it or play it.
 
-- **POST** `/sessions/{sessionId}/players/{guildId}/history/replay`
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/history/replay`
 - **Body**:
 ```json
 {
@@ -258,18 +284,49 @@ Convenience endpoint to take a track from history and queue it or play it.
 ### 5.1 Invalidate Cache
 Forcibly removes an item from the cache.
 
-- **DELETE** `/cache/{identifier}`
+- **DELETE** `/g1/cache/{identifier}`
 - **Query**: `scope` ("metadata", "content", "all")
 - **Response**: `204 No Content`
 
 ---
 
+# Part 2: Standard Lavalink V4 API (`/v4`)
+
+Strict implementation of the [Lavalink V4 REST API](https://lavalink.dev/api/rest.html).
+**Rest Base URL**: `/v4`
+**WebSocket**: `/v4/websocket`
+
+> **Note**: These endpoints do **NOT** interact with the G1 Queue or History.
+
+## Supported Endpoints
+
+- **GET** `/v4/info`: Standard V4 Info Response.
+- **GET** `/v4/version`: Plain text version string.
+- **GET** `/v4/stats`: Server stats.
+- **GET** `/v4/loadtracks`: Track Loading.
+- **GET** `/v4/decodetrack`: Single track decoding.
+- **POST** `/v4/decodetracks`: Bulk track decoding.
+- **GET** `/v4/sessions/{sessionId}/players/{guildId}`: Get Player.
+- **PATCH** `/v4/sessions/{sessionId}/players/{guildId}`: Update Player (Play/Stop/Filters).
+- **DELETE** `/v4/sessions/{sessionId}/players/{guildId}`: Destroy Player.
+- **PATCH** `/v4/sessions/{sessionId}`: Update Session.
+
+---
+
 ## 6. WebSocket Events
 
-Events are sent to connected WebSocket clients.
+Events are sent to connected WebSocket clients within the session. The payload format depends on the connected endpoint.
 
-- **TrackStart**: `{ "op": "event", "type": "TrackStartEvent", "track": {...} }`
-- **TrackEnd**: `{ "op": "event", "type": "TrackEndEvent", "track": {...}, "reason": "FINISHED" }`
-    - `reason`: `FINISHED`, `loadFailed`, `STOPPED`, `REPLACED`, `CLEANUP`.
-- **QueueUpdate**: `{ "op": "event", "type": "QueueUpdate", "guildId": "...", "size": 10 }` (Optional, useful for UI sync)
-- **HistoryUpdate**: `{ "op": "event", "type": "HistoryUpdate", "guildId": "..." }`
+### 6.1 G1 WebSocket (`/g1/websocket`)
+Receives **Enriched Events** where the `track` field is the full **APITrack Object**.
+- **TrackStart**: `{ "op": "event", "type": "TrackStartEvent", "track": { "encoded": "...", "info": {...}, "userData": {...} } }`
+- **TrackEnd**: `{ "op": "event", "type": "TrackEndEvent", "track": { "encoded": "...", ... } }`
+
+### 6.2 V4 WebSocket (`/v4/websocket`)
+Receives **Standard Events** compatible with typical Lavalink clients (Downgraded to TrackInfo).
+- **TrackStart**: `{ "op": "event", "type": "TrackStartEvent", "track": { "identifier": "...", "title": "..." } }`
+- **TrackEnd**: `{ "op": "event", "type": "TrackEndEvent", "track": { ... } }`
+
+### 6.3 Shared Event Types
+- **QueueUpdate** (G1 Only typically): `{ "op": "event", "type": "QueueUpdate", "guildId": "...", "size": 10 }`
+- **HistoryUpdate** (G1 Only typically): `{ "op": "event", "type": "HistoryUpdate", "guildId": "..." }`

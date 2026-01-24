@@ -1,6 +1,6 @@
 import { IncomingMessage } from 'http';
 import Websocket from 'ws';
-import { OpCodes, ShoukakuClientInfo, State, Versions } from '../Constants';
+import { OpCodes, ShoukakuClientInfo, State } from '../Constants';
 import type {
 	PlayerUpdate,
 	TrackEndEvent,
@@ -158,7 +158,7 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 		this.name = options.name;
 		this.group = options.group;
 		this.auth = options.auth;
-		this.url = `${options.secure ? 'wss' : 'ws'}://${options.url}/v${Versions.WEBSOCKET_VERSION}/websocket`;
+		this.url = `${options.secure ? 'wss' : 'ws'}://${options.url}/g1/websocket`;
 		this.state = State.DISCONNECTED;
 		this.reconnects = 0;
 		this.stats = null;

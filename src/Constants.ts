@@ -24,10 +24,6 @@ export enum OpCodes {
 	HISTORY_UPDATE = 'HistoryUpdate'
 }
 
-export const Versions = {
-	WEBSOCKET_VERSION: 4
-};
-
 export const ShoukakuDefaults: Required<ShoukakuOptions> = {
 	resume: false,
 	resumeTimeout: 30,
