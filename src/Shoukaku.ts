@@ -3,7 +3,7 @@ import { Node } from './node/Node';
 import { Connector } from './connectors/Connector';
 import { Constructor, mergeDefault, TypedEventEmitter } from './Utils';
 import { Player } from './guild/Player';
-import { Rest } from './node/Rest';
+import { Rest, UpdatePlayerInfo } from './node/Rest';
 import { Connection } from './guild/Connection';
 
 export interface Structures {
@@ -288,5 +288,19 @@ export class Shoukaku extends TypedEventEmitter<ShoukakuEvents> {
 			player.clean();
 			this.players.delete(guildId);
 		}
+	}
+
+	/**
+	 * Resume players from a list of player options
+	 * @param players An array of object that conforms to UpdatePlayerInfo
+	 */
+	public async resumeSessions(players: UpdatePlayerInfo[]): Promise<void> {
+		const promises = [];
+		for (const data of players) {
+			const node = this.getIdealNode();
+			if (!node) continue;
+			promises.push(node.rest.updatePlayer(data));
+		}
+		await Promise.allSettled(promises);
 	}
 }
