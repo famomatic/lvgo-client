@@ -132,6 +132,10 @@ export interface FilterOptions {
 	distortion?: DistortionSettings | null;
 	channelMix?: ChannelMixSettings | null;
 	lowPass?: LowPassSettings | null;
+	loudnessNormalization?: boolean;
+	silenceRemoval?: boolean;
+	seekGhosting?: boolean;
+	crossfading?: boolean;
 }
 
 // Interfaces are not final, but types are, and therefore has an index signature
@@ -413,6 +417,38 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	}
 
 	/**
+	 * Change the loudness normalization settings applied to the currently playing track
+	 * @param loudnessNormalization Boolean value to specify whether to enable loudness normalization
+	 */
+	public setLoudnessNormalization(loudnessNormalization: boolean): Promise<void> {
+		return this.setFilters({ loudnessNormalization });
+	}
+
+	/**
+	 * Change the silence removal settings applied to the currently playing track
+	 * @param silenceRemoval Boolean value to specify whether to enable silence removal
+	 */
+	public setSilenceRemoval(silenceRemoval: boolean): Promise<void> {
+		return this.setFilters({ silenceRemoval });
+	}
+
+	/**
+	 * Change the seek ghosting settings applied to the currently playing track
+	 * @param seekGhosting Boolean value to specify whether to enable seek ghosting
+	 */
+	public setSeekGhosting(seekGhosting: boolean): Promise<void> {
+		return this.setFilters({ seekGhosting });
+	}
+
+	/**
+	 * Change the crossfading settings applied to the currently playing track
+	 * @param crossfading Boolean value to specify whether to enable crossfading
+	 */
+	public setCrossfading(crossfading: boolean): Promise<void> {
+		return this.setFilters({ crossfading });
+	}
+
+	/**
 	 * Change the all filter settings applied to the currently playing track
 	 * @param filters An object that conforms to FilterOptions that defines all filters to apply/modify
 	 */
@@ -434,7 +470,11 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 			rotation: null,
 			distortion: null,
 			channelMix: null,
-			lowPass: null
+			lowPass: null,
+			loudnessNormalization: false,
+			silenceRemoval: false,
+			seekGhosting: false,
+			crossfading: false
 		});
 	}
 

@@ -146,7 +146,59 @@ Disconnects voice, deletes the player, **Clears Queue**, and **Clears History**.
 
 ---
 
-## 3. Queue Management (Server-Side)
+## 3. Audio Filters (DSP)
+
+The `filters` object in the Player Update payload allows for real-time audio processing.
+
+### 3.1 Supported Filters
+
+- **volume**: `float` (0.0 to 5.0). Default 1.0.
+- **equalizer**: `Array<float>` (Size 15). Gains for bands [25, 40, 63, 100, 160, 250, 400, 630, 1k, 1.6k, 2.5k, 4k, 6.3k, 10k, 16k] Hz. (-0.25 to 1.0).
+- **karaoke**:
+  ```json
+  { "level": 1.0, "monoLevel": 1.0, "filterBand": 220.0, "filterWidth": 100.0 }
+  ```
+- **timescale**:
+  ```json
+  { "speed": 1.0, "pitch": 1.0, "rate": 1.0 }
+  ```
+- **tremolo**:
+  ```json
+  { "frequency": 2.0, "depth": 0.5 }
+  ```
+- **vibrato**:
+  ```json
+  { "frequency": 2.0, "depth": 0.5 }
+  ```
+- **rotation**:
+  ```json
+  { "rotationHz": 0.2 }
+  ```
+- **distortion**:
+  ```json
+  { "sinOffset": 0, "sinScale": 1, "cosOffset": 0, "cosScale": 1, "tanOffset": 0, "tanScale": 1, "offset": 0, "scale": 1 }
+  ```
+- **channelMix**:
+  ```json
+  { "leftToLeft": 1.0, "leftToRight": 0.0, "rightToLeft": 0.0, "rightToRight": 1.0 }
+  ```
+- **lowPass**:
+  ```json
+  { "smoothing": 20.0 }
+  ```
+
+### 3.2 Custom Filters (G1 Only)
+
+These filters are **ignored** if sent to the `/v4` endpoint. They only work with the `/g1` API.
+
+- **loudnessNormalization**: `boolean`. Default `false`.
+- **silenceRemoval**: `boolean`. Default `false`.
+- **seekGhosting**: `boolean`. Default `false`.
+- **crossfading**: `boolean`. Default `false`.
+
+---
+
+## 4. Queue Management (Server-Side)
 
 The queue is a persistent **FIFO List** stored in Redis (`queue:{guildId}`).
 Tracks flow: `Queue Head` -> `Player` -> `History`.
@@ -240,7 +292,9 @@ Removes a specific set of tracks from the queue.
 
 ---
 
-## 4. History Management
+---
+
+## 5. History Management
 
 The server automatically maintains a history of played tracks in Redis (`history:{guildId}`).
 **Behavior**:
@@ -279,7 +333,7 @@ Convenience endpoint to take a track from history and queue it or play it.
 
 ---
 
-## 5. Caching System
+## 6. Caching System
 
 ### 5.1 Invalidate Cache
 Forcibly removes an item from the cache.
@@ -313,7 +367,7 @@ Strict implementation of the [Lavalink V4 REST API](https://lavalink.dev/api/res
 
 ---
 
-## 6. WebSocket Events
+## 7. WebSocket Events
 
 Events are sent to connected WebSocket clients within the session. The payload format depends on the connected endpoint.
 
