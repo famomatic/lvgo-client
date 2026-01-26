@@ -1,5 +1,5 @@
 import Info from '../package.json';
-import type { NodeOption, ShoukakuOptions } from './Shoukaku';
+import type { NodeOption, LvgoClientOptions } from './LvgoClient';
 
 export enum State {
 	CONNECTING,
@@ -24,7 +24,7 @@ export enum OpCodes {
 	HISTORY_UPDATE = 'HistoryUpdate'
 }
 
-export const ShoukakuDefaults: Required<ShoukakuOptions> = {
+export const LvgoClientDefaults: Required<LvgoClientOptions> = {
 	resume: false,
 	resumeTimeout: 30,
 	resumeByLibrary: false,
@@ -32,7 +32,7 @@ export const ShoukakuDefaults: Required<ShoukakuOptions> = {
 	reconnectInterval: 5,
 	restTimeout: 60,
 	moveOnDisconnect: false,
-	userAgent: 'Discord Bot/unknown (https://github.com/shipgirlproject/Shoukaku.git)',
+	userAgent: 'Discord Bot/unknown (https://github.com/famomatic/lvgo-client.git)',
 	structures: {},
 	voiceConnectionTimeout: 15,
 	nodeResolver: (nodes) => [ ...nodes.values() ]
@@ -41,7 +41,7 @@ export const ShoukakuDefaults: Required<ShoukakuOptions> = {
 		.shift()
 };
 
-export const ShoukakuClientInfo = `${Info.name}/${Info.version} (${Info.repository.url})`;
+export const LvgoClientInfo = `${Info.name}/${Info.version} (${Info.repository.url})`;
 
 export const NodeDefaults: NodeOption = {
 	name: 'Default',

@@ -6,4 +6,4 @@ export * from './src/guild/Connection';
 export * from './src/guild/Player';
 export * from './src/node/Node';
 export * from './src/node/Rest';
-export * from './src/Shoukaku';
+export * from './src/LvgoClient';

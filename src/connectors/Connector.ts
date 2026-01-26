@@ -1,26 +1,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 import { NodeDefaults } from '../Constants';
 import type { ServerUpdate, StateUpdatePartial } from '../guild/Connection';
-import type { NodeOption, Shoukaku } from '../Shoukaku';
+import { LvgoClient } from '../LvgoClient';
+import { NodeOption } from '../LvgoClient';
 import { mergeDefault } from '../Utils';
 
 export interface ConnectorMethods {
-	sendPacket: any;
-	getId: any;
+	sendPacket: (shardId: number, payload: unknown, important: boolean) => void;
+	getId: () => string;
+	getShardId: (guildId: string) => number;
 }
 
 export const AllowedPackets = [ 'VOICE_STATE_UPDATE', 'VOICE_SERVER_UPDATE' ];
 
 export abstract class Connector {
 	protected readonly client: any;
-	protected manager: Shoukaku | null;
+	protected manager: LvgoClient | null;
 	constructor(client: any) {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		this.client = client;
 		this.manager = null;
 	}
 
-	public set(manager: Shoukaku): Connector {
+	public set(manager: LvgoClient): this {
 		this.manager = manager;
 		return this;
 	}

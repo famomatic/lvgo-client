@@ -1,6 +1,6 @@
 import { IncomingMessage } from 'http';
 import Websocket from 'ws';
-import { OpCodes, ShoukakuClientInfo, State } from '../Constants';
+import { OpCodes, LvgoClientInfo, State } from '../Constants';
 import type {
 	PlayerUpdate,
 	TrackEndEvent,
@@ -9,7 +9,7 @@ import type {
 	TrackStuckEvent,
 	WebSocketClosedEvent
 } from '../guild/Player';
-import type { NodeOption, Shoukaku, ShoukakuEvents } from '../Shoukaku';
+import type { NodeOption, LvgoClient, LvgoClientEvents } from '../LvgoClient';
 import { TypedEventEmitter, wait } from '../Utils';
 import { Rest } from './Rest';
 
@@ -91,7 +91,7 @@ export interface ResumableHeaders {
 export type NonResumableHeaders = Omit<ResumableHeaders, 'Session-Id'>;
 
 export type NodeEvents = {
-	[K in keyof ShoukakuEvents]: ShoukakuEvents[K] extends [unknown, ...infer R] ? R : never;
+	[K in keyof LvgoClientEvents]: LvgoClientEvents[K] extends [unknown, ...infer R] ? R : never;
 };
 
 /**
@@ -99,9 +99,9 @@ export type NodeEvents = {
  */
 export class Node extends TypedEventEmitter<NodeEvents> {
 	/**
-     * Shoukaku class
+     * LvgoClient class
      */
-	public readonly manager: Shoukaku;
+	public readonly manager: LvgoClient;
 	/**
      * Lavalink rest API
      */
@@ -151,7 +151,7 @@ export class Node extends TypedEventEmitter<NodeEvents> {
      * @param manager Shoukaku instance
      * @param options Options on creating this node
      */
-	constructor(manager: Shoukaku, options: NodeOption) {
+	constructor(manager: LvgoClient, options: NodeOption) {
 		super();
 		this.manager = manager;
 		this.rest = new (this.manager.options.structures.rest ?? Rest)(this, options);
@@ -202,7 +202,7 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 		this.state = State.CONNECTING;
 
 		const headers: NonResumableHeaders | ResumableHeaders = {
-			'Client-Name': ShoukakuClientInfo,
+			'Client-Name': LvgoClientInfo,
 			'User-Agent': this.manager.options.userAgent,
 			'Authorization': this.auth,
 			'User-Id': this.manager.id

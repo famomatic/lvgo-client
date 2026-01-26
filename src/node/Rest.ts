@@ -1,5 +1,5 @@
 import type { FilterOptions } from '../guild/Player';
-import type { NodeOption } from '../Shoukaku';
+import type { NodeOption } from '../LvgoClient';
 import type { Node, NodeInfo, Stats } from './Node';
 
 export type Severity = 'common' | 'suspicious' | 'fault';
@@ -464,6 +464,47 @@ export class Rest {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: { index, mode }
+			}
+		};
+		return this.fetch(options).then(() => undefined);
+	}
+
+	/**
+	 * Clear history
+	 */
+	public clearHistory(guildId: string): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/history`,
+			options: {
+				method: 'DELETE'
+			}
+		};
+		return this.fetch(options).then(() => undefined);
+	}
+
+	/**
+	 * Remove queue item by index
+	 */
+	public removeQueueItem(guildId: string, index: number): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/${index}`,
+			options: {
+				method: 'DELETE'
+			}
+		};
+		return this.fetch(options).then(() => undefined);
+	}
+
+	/**
+	 * Set repeat mode
+	 */
+	public setRepeatMode(guildId: string, mode: 'off' | 'track' | 'queue'): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/repeat`,
+			options: {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: { mode }
 			}
 		};
 		return this.fetch(options).then(() => undefined);

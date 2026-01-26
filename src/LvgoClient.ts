@@ -1,4 +1,4 @@
-import { ShoukakuDefaults, VoiceState } from './Constants';
+import { LvgoClientDefaults, VoiceState } from './Constants';
 import { Node } from './node/Node';
 import { Connector } from './connectors/Connector';
 import { Constructor, mergeDefault, TypedEventEmitter } from './Utils';
@@ -40,7 +40,7 @@ export interface NodeOption {
 	group?: string;
 }
 
-export interface ShoukakuOptions {
+export interface LvgoClientOptions {
 	/**
      * Whether to resume a connection on disconnect to Lavalink (Server Side) (Note: DOES NOT RESUME WHEN THE LAVALINK SERVER DIES)
      */
@@ -113,7 +113,7 @@ export interface VoiceChannelOptions {
 // Interfaces are not final, but types are, and therefore has an index signature
 // https://stackoverflow.com/a/64970740
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-export type ShoukakuEvents = {
+export type LvgoClientEvents = {
 	/**
      * Emitted when reconnect tries are occurring and how many tries are left
      * @eventProperty
@@ -152,17 +152,17 @@ export type ShoukakuEvents = {
 };
 
 /**
- * Main Shoukaku class
+ * Main LvgoClient class
  */
-export class Shoukaku extends TypedEventEmitter<ShoukakuEvents> {
+export class LvgoClient extends TypedEventEmitter<LvgoClientEvents> {
 	/**
      * Discord library connector
      */
 	public readonly connector: Connector;
 	/**
-     * Shoukaku options
+     * LvgoClient options
      */
-	public readonly options: Required<ShoukakuOptions>;
+	public readonly options: Required<LvgoClientOptions>;
 	/**
      * Connected Lavalink nodes
      */
@@ -176,18 +176,18 @@ export class Shoukaku extends TypedEventEmitter<ShoukakuEvents> {
      */
 	public readonly players: Map<string, Player>;
 	/**
-     * Shoukaku instance identifier
+     * LvgoClient instance identifier
      */
 	public id: string | null;
 	/**
      * @param connector A Discord library connector
      * @param nodes An array that conforms to the NodeOption type that specifies nodes to connect to
-     * @param options Options to pass to create this Shoukaku instance
+     * @param options Options to pass to create this LvgoClient instance
      */
-	constructor(connector: Connector, nodes: NodeOption[], options: ShoukakuOptions = {}) {
+	constructor(connector: Connector, nodes: NodeOption[], options: LvgoClientOptions = {}) {
 		super();
 		this.connector = connector.set(this);
-		this.options = mergeDefault<ShoukakuOptions>(ShoukakuDefaults, options);
+		this.options = mergeDefault<LvgoClientOptions>(LvgoClientDefaults, options);
 		this.nodes = new Map();
 		this.connections = new Map();
 		this.players = new Map();

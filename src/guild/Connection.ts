@@ -1,6 +1,6 @@
 import { EventEmitter, once } from 'node:events';
 import { State, VoiceState } from '../Constants';
-import type { Shoukaku, VoiceChannelOptions } from '../Shoukaku';
+import type { LvgoClient, VoiceChannelOptions } from '../LvgoClient';
 
 /**
  * Represents the partial payload from a stateUpdate event
@@ -40,7 +40,7 @@ export class Connection extends EventEmitter {
 	/**
 	 * The manager where this connection is on
 	 */
-	public manager: Shoukaku;
+	public manager: LvgoClient;
 	/**
 	 * GuildId of the connection that is being managed by this instance
 	 */
@@ -89,7 +89,7 @@ export class Connection extends EventEmitter {
 	 * @param manager The manager of this connection
 	 * @param options The options to pass in connection creation
 	 */
-	constructor(manager: Shoukaku, options: VoiceChannelOptions) {
+	constructor(manager: LvgoClient, options: VoiceChannelOptions) {
 		super();
 		this.manager = manager;
 		this.guildId = options.guildId;

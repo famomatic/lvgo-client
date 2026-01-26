@@ -144,6 +144,30 @@ Disconnects voice, deletes the player, **Clears Queue**, and **Clears History**.
 - **DELETE** `/g1/sessions/{sessionId}/players/{guildId}`
 - **Response**: `204 No Content`
 
+### 2.4 Player Shortcuts (Convenience)
+These endpoints provide quick actions without needing full PATCH payloads.
+
+#### Stop Player
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/stop`
+- **Response**: `204 No Content`
+
+#### Replay Track
+Restarts the current track from the beginning.
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/replay`
+- **Response**: `200 OK` (Player Object)
+
+#### Seek Track
+Seeks to a specific position (in milliseconds).
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/seek`
+- **Body**: `{ "position": 60000 }`
+- **Response**: `200 OK` (New Position: Int64)
+
+#### Set Repeat Mode
+Sets the repeat mode for the player.
+- **POST** `/g1/sessions/{sessionId}/players/{guildId}/repeat`
+- **Body**: `{ "mode": "track" }` // "off", "track", "queue"
+- **Response**: `200 OK` (Player Object)
+
 ---
 
 ## 3. Audio Filters (DSP)
@@ -290,6 +314,11 @@ Removes a specific set of tracks from the queue.
 ```
 - **Response**: `200 OK` `{ "removed": 1, "remaining": 13 }`
 
+### 3.8 Remove Item by Index
+Removes a single item at the specified index.
+- **DELETE** `/g1/sessions/{sessionId}/players/{guildId}/queue/{index}`
+- **Response**: `204 No Content`
+
 ---
 
 ---
@@ -330,6 +359,11 @@ Convenience endpoint to take a track from history and queue it or play it.
 }
 ```
 - **Response**: `200 OK` `{ "track": { ... }, "position": "playing" }`
+
+### 4.3 Clear History
+Clears the play history for the guild.
+- **DELETE** `/g1/sessions/{sessionId}/players/{guildId}/history`
+- **Response**: `204 No Content`
 
 ---
 
