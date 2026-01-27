@@ -50,26 +50,58 @@ export interface LavalinkResponse {
 	tracks: Track[];
 }
 
-export interface Address {
-	address: string;
-	failingTimestamp: number;
-	failingTime: string;
+export interface MultiSearchResult {
+	[source: string]: {
+		result: LavalinkResponse;
+		latency: number;
+	};
 }
 
-export interface RoutePlanner {
-	class: null | 'RotatingIpRoutePlanner' | 'NanoIpRoutePlanner' | 'RotatingNanoIpRoutePlanner' | 'BalancingIpRoutePlanner';
-	details: null | {
-		ipBlock: {
-			type: string;
-			size: string;
-		};
-		failingAddresses: Address[];
-		rotateIndex: string;
-		ipIndex: string;
-		currentAddress: string;
-		blockIndex: string;
-		currentAddressIndex: string;
+export interface PlayerStats {
+	TotalPlaytimeMs: number;
+	TracksPlayed: number;
+	TrackSkips: number;
+	SessionStartTime: number;
+}
+
+export interface GuildStats {
+	TotalTracksPlayed: number;
+	TotalPlaytimeMs: number;
+	TopTracks: Track[];
+}
+
+export interface HealthResponse {
+	status: string;
+	uptime: number;
+	memory: {
+		alloc: number;
+		sys: number;
 	};
+}
+
+export interface RateLimitInfo {
+	global: {
+		limit: number;
+		remaining: number;
+		reset: number;
+	};
+	perIp: {
+		limit: number;
+		remaining: number;
+	};
+}
+
+export interface PartyMember {
+	guildId: string;
+	sessionId: string;
+}
+
+export interface PartyInfo {
+	id: string;
+	hostGuildId: string;
+	hostSessionId: string;
+	members: PartyMember[];
+	syncEnabled: boolean;
 }
 
 export interface LavalinkPlayerVoice {
@@ -300,31 +332,226 @@ export class Rest {
 	}
 
 	/**
-	 * Get routeplanner status from Lavalink
-	 * @returns Promise that resolves to a routeplanner response
+	 * Multi-source search
+	 * @param query Search query
+	 * @param sources Optional comma-separated list of sources (e.g., 'youtube,soundcloud')
+	 * @returns Promise that resolves to search results from multiple sources
 	 */
-	public getRoutePlannerStatus(): Promise<RoutePlanner | undefined> {
+	public multiSearch(query: string, sources?: string[]): Promise<MultiSearchResult | undefined> {
+		const params: Record<string, string> = { query };
+		if (sources?.length) params.sources = sources.join(',');
 		const options = {
-			endpoint: '/routeplanner/status',
+			endpoint: '/tracks/search',
+			options: { params }
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Stop the player
+	 * @param guildId Guild ID
+	 */
+	public async stopPlayer(guildId: string): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/stop`,
+			options: { method: 'POST' }
+		};
+		await this.fetch(options);
+	}
+
+	/**
+	 * Replay the current track from the beginning
+	 * @param guildId Guild ID
+	 * @returns Promise that resolves to the player object
+	 */
+	public replayPlayer(guildId: string): Promise<LavalinkPlayer | undefined> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/replay`,
+			options: { method: 'POST' }
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Seek to a specific position using POST endpoint
+	 * @param guildId Guild ID
+	 * @param position Position in milliseconds
+	 * @returns Promise that resolves to the new position
+	 */
+	public seekPlayer(guildId: string, position: number): Promise<number | undefined> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/seek`,
+			options: {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: { position }
+			}
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Set auto-shuffle mode
+	 * @param guildId Guild ID
+	 * @param enabled Whether to enable auto-shuffle
+	 */
+	public async setAutoShuffle(guildId: string, enabled: boolean): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/autoshuffle`,
+			options: {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: { enabled }
+			}
+		};
+		await this.fetch(options);
+	}
+
+	/**
+	 * Set sleep timer
+	 * @param guildId Guild ID
+	 * @param duration Duration in milliseconds
+	 */
+	public async setSleepTimer(guildId: string, duration: number): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/sleep`,
+			options: {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: { duration }
+			}
+		};
+		await this.fetch(options);
+	}
+
+	/**
+	 * Cancel sleep timer
+	 * @param guildId Guild ID
+	 */
+	public async cancelSleepTimer(guildId: string): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/sleep`,
+			options: { method: 'DELETE' }
+		};
+		await this.fetch(options);
+	}
+
+	/**
+	 * Play the previous track from history
+	 * @param guildId Guild ID
+	 */
+	public async playPrevious(guildId: string): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/previous`,
+			options: { method: 'POST' }
+		};
+		await this.fetch(options);
+	}
+
+	/**
+	 * Get player playback statistics
+	 * @param guildId Guild ID
+	 * @returns Promise that resolves to player stats
+	 */
+	public getPlayerStats(guildId: string): Promise<PlayerStats | undefined> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/stats`,
 			options: {}
 		};
 		return this.fetch(options);
 	}
 
 	/**
-	 * Release blacklisted IP address into pool of IPs
-	 * @param address IP address
+	 * Create a new party hosted by the current player
+	 * @param guildId Guild ID
+	 * @returns Promise that resolves to the created party
 	 */
-	public async unmarkFailedAddress(address: string): Promise<void> {
+	public createParty(guildId: string): Promise<PartyInfo | undefined> {
 		const options = {
-			endpoint: '/routeplanner/free/address',
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/create`,
+			options: { method: 'POST' }
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Join an existing party
+	 * @param guildId Guild ID
+	 * @param partyId Party ID to join
+	 * @returns Promise that resolves to the party info
+	 */
+	public joinParty(guildId: string, partyId: string): Promise<PartyInfo | undefined> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/join`,
 			options: {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: { address }
+				body: { partyId }
 			}
 		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Leave the current party
+	 * @param guildId Guild ID
+	 */
+	public async leaveParty(guildId: string): Promise<void> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/leave`,
+			options: { method: 'POST' }
+		};
 		await this.fetch(options);
+	}
+
+	/**
+	 * Get party info for the current player
+	 * @param guildId Guild ID
+	 * @returns Promise that resolves to the party info or undefined if not in a party
+	 */
+	public getParty(guildId: string): Promise<PartyInfo | undefined> {
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party`,
+			options: {}
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Enhanced health check
+	 * @returns Promise that resolves to health status
+	 */
+	public healthCheck(): Promise<HealthResponse | undefined> {
+		const options = {
+			endpoint: '/health',
+			options: {}
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Get rate limit info
+	 * @returns Promise that resolves to rate limit information
+	 */
+	public getRateLimits(): Promise<RateLimitInfo | undefined> {
+		const options = {
+			endpoint: '/info/limits',
+			options: {}
+		};
+		return this.fetch(options);
+	}
+
+	/**
+	 * Get guild usage statistics
+	 * @param guildId Guild ID
+	 * @returns Promise that resolves to guild stats
+	 */
+	public getGuildStats(guildId: string): Promise<GuildStats | undefined> {
+		const options = {
+			endpoint: `/stats/${guildId}`,
+			options: {}
+		};
+		return this.fetch(options);
 	}
 
 	/**

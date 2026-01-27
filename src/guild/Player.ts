@@ -1,6 +1,6 @@
 import { OpCodes, State } from '../Constants';
 import type { Node } from '../node/Node';
-import type { Exception, Track, UpdatePlayerInfo, UpdatePlayerOptions } from '../node/Rest';
+import type { Exception, PartyInfo, PlayerStats, Track, UpdatePlayerInfo, UpdatePlayerOptions } from '../node/Rest';
 import { TypedEventEmitter } from '../Utils';
 import { Connection } from './Connection';
 
@@ -136,6 +136,7 @@ export interface FilterOptions {
 	silenceRemoval?: boolean;
 	seekGhosting?: boolean;
 	crossfading?: boolean;
+	crossfadeDurationMs?: number;
 }
 
 // Interfaces are not final, but types are, and therefore has an index signature
@@ -226,6 +227,11 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	 */
 	public filters: FilterOptions;
 
+	/**
+	 * Id of the party this player is in, if any
+	 */
+	public partyId: string | null;
+
 	constructor(guildId: string, node: Node) {
 		super();
 		this.guildId = guildId;
@@ -236,6 +242,7 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 		this.position = 0;
 		this.ping = 0;
 		this.filters = {};
+		this.partyId = null;
 	}
 
 	public get data(): UpdatePlayerInfo {
@@ -474,8 +481,109 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 			loudnessNormalization: false,
 			silenceRemoval: false,
 			seekGhosting: false,
-			crossfading: false
+			crossfading: false,
+			crossfadeDurationMs: undefined
 		});
+	}
+
+	/**
+	 * Set the crossfade duration
+	 * @param durationMs Duration in milliseconds
+	 */
+	public setCrossfadeDuration(durationMs: number): Promise<void> {
+		return this.setFilters({ crossfadeDurationMs: durationMs });
+	}
+
+	/**
+	 * Stop the player using the shortcut endpoint
+	 */
+	public async stop(): Promise<void> {
+		await this.node.rest.stopPlayer(this.guildId);
+		this.track = null;
+		this.position = 0;
+	}
+
+	/**
+	 * Replay the current track from the beginning
+	 */
+	public async replay(): Promise<void> {
+		await this.node.rest.replayPlayer(this.guildId);
+		this.position = 0;
+	}
+
+	/**
+	 * Play the previous track from history
+	 */
+	public playPrevious(): Promise<void> {
+		return this.node.rest.playPrevious(this.guildId);
+	}
+
+	/**
+	 * Set auto-shuffle mode
+	 * @param enabled Whether to enable auto-shuffle
+	 */
+	public setAutoShuffle(enabled: boolean): Promise<void> {
+		return this.node.rest.setAutoShuffle(this.guildId, enabled);
+	}
+
+	/**
+	 * Set a sleep timer
+	 * @param duration Duration in milliseconds before the player stops
+	 */
+	public setSleepTimer(duration: number): Promise<void> {
+		return this.node.rest.setSleepTimer(this.guildId, duration);
+	}
+
+	/**
+	 * Cancel the sleep timer
+	 */
+	public cancelSleepTimer(): Promise<void> {
+		return this.node.rest.cancelSleepTimer(this.guildId);
+	}
+
+	/**
+	 * Get playback statistics for this player
+	 * @returns Promise that resolves to player stats
+	 */
+	public getStats(): Promise<PlayerStats | undefined> {
+		return this.node.rest.getPlayerStats(this.guildId);
+	}
+
+	/**
+	 * Create a new listen-together party hosted by this player
+	 * @returns Promise that resolves to the created party
+	 */
+	public async createParty(): Promise<PartyInfo | undefined> {
+		const party = await this.node.rest.createParty(this.guildId);
+		if (party) this.partyId = party.id;
+		return party;
+	}
+
+	/**
+	 * Join an existing listen-together party
+	 * @param partyId The ID of the party to join
+	 * @returns Promise that resolves to the party info
+	 */
+	public async joinParty(partyId: string): Promise<PartyInfo | undefined> {
+		const party = await this.node.rest.joinParty(this.guildId, partyId);
+		if (party) this.partyId = party.id;
+		return party;
+	}
+
+	/**
+	 * Leave the current party
+	 */
+	public async leaveParty(): Promise<void> {
+		await this.node.rest.leaveParty(this.guildId);
+		this.partyId = null;
+	}
+
+	/**
+	 * Get info about the current party
+	 * @returns Promise that resolves to the party info or undefined if not in a party
+	 */
+	public getParty(): Promise<PartyInfo | undefined> {
+		return this.node.rest.getParty(this.guildId);
 	}
 
 	/**
@@ -540,6 +648,7 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 		this.volume = 100;
 		this.position = 0;
 		this.filters = {};
+		this.partyId = null;
 	}
 
 	/**
