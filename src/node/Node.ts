@@ -48,35 +48,24 @@ export interface Stats {
 	uptime: number;
 }
 
-export interface NodeInfoVersion {
-	semver: string;
-	major: number;
-	minor: number;
-	patch: number;
-	preRelease?: string;
-	build?: string;
-}
+
 
 export interface NodeInfoGit {
 	branch: string;
 	commit: string;
-	commitTime: number;
 }
 
-export interface NodeInfoPlugin {
-	name: string;
-	version: string;
-}
+
 
 export interface NodeInfo {
-	version: NodeInfoVersion;
+	version: string;
 	buildTime: number;
 	git: NodeInfoGit;
-	jvm: string;
-	lavaplayer: string;
-	sourceManagers: string[];
-	filters: string[];
-	plugins: NodeInfoPlugin[];
+	features: {
+		queue: boolean;
+		history: boolean;
+		caching: string[];
+	};
 }
 
 export interface ResumableHeaders {

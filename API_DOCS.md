@@ -89,9 +89,49 @@ Decodes a base64 encoded track string.
 - **GET** `/g1/tracks/decode?encoded={base64}`
 - **Response**: `200 OK` (Track Object or 400 Bad Request)
 
+### 1.5 System Stats
+Returns memory, CPU, and uptime statistics.
+
+- **GET** `/g1/stats`
+- **Response**: `200 OK`
+```json
+{
+  "players": 1,
+  "playingPlayers": 1,
+  "uptime": 3600000,
+  "memory": {
+    "free": 100000,
+    "used": 200000,
+    "allocated": 300000,
+    "reservable": 300000
+  },
+  "cpu": { "cores": 4, "systemLoad": 0.1, "lavalinkLoad": 0.05 },
+  "frameStats": { "sent": 6000, "nulled": 0, "deficit": 0 }
+}
+```
+
 ---
 
 ## 2. Session & Player
+
+### 2.0 Update Session
+Updates session configuration (resuming and timeout).
+
+- **PATCH** `/g1/sessions/{sessionId}`
+- **Body**:
+```json
+{
+  "resuming": true,
+  "timeout": 60
+}
+```
+- **Response**: `200 OK`
+```json
+{
+  "resuming": true,
+  "timeout": 60
+}
+```
 
 ### 2.1 Get Player
 Retrieves the current state of a player.
@@ -138,6 +178,8 @@ Retrieves a list of all players in the session.
 Updates the player configuration. Sending a `track` object will **Stop** the current track and **Play** the new one immediately (bypassing the queue, but keeping the queue intact).
 
 - **PATCH** `/g1/sessions/{sessionId}/players/{guildId}`
+- **Query Parameters**:
+  - `noReplace` (Optional, boolean): If `true`, the operation will be ignored if a track is already playing (and not finished). Default `false`.
 - **Body**:
 ```json
 {

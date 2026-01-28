@@ -162,9 +162,25 @@ export interface Queue {
 	tracks: Track[];
 }
 
+export interface QueueResponse {
+	added: number;
+	queueLength: number;
+}
+
+export interface QueueRemoveResponse {
+	removed: number;
+	remaining: number;
+}
+
+export interface HistoryReplayResponse {
+	track: Track;
+	position: string;
+}
+
 export interface History {
 	total: number;
 	tracks: ({ endTime: number } & Track)[];
+	endTime: number;
 }
 
 export interface FetchOptions {
@@ -498,8 +514,8 @@ export class Rest {
 	 */
 	public async leaveParty(guildId: string): Promise<void> {
 		const options = {
-			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/leave`,
-			options: { method: 'POST' }
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party`,
+			options: { method: 'DELETE' }
 		};
 		await this.fetch(options);
 	}
@@ -583,7 +599,7 @@ export class Rest {
 	/**
 	 * Add to queue
 	 */
-	public addQueue(guildId: string, tracks: Track[]): Promise<void> {
+	public addQueue(guildId: string, tracks: Track[]): Promise<QueueResponse | undefined> {
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue`,
 			options: {
@@ -592,13 +608,13 @@ export class Rest {
 				body: { tracks }
 			}
 		};
-		return this.fetch(options).then(() => undefined);
+		return this.fetch<QueueResponse>(options);
 	}
 
 	/**
 	 * Prepend to queue
 	 */
-	public prependQueue(guildId: string, tracks: Track[]): Promise<void> {
+	public prependQueue(guildId: string, tracks: Track[]): Promise<QueueResponse | undefined> {
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/prepend`,
 			options: {
@@ -607,7 +623,7 @@ export class Rest {
 				body: { tracks }
 			}
 		};
-		return this.fetch(options).then(() => undefined);
+		return this.fetch<QueueResponse>(options);
 	}
 
 	/**
@@ -656,16 +672,16 @@ export class Rest {
 	/**
 	 * Remove range
 	 */
-	public removeQueue(guildId: string, start: number, end: number): Promise<void> {
+	public removeQueue(guildId: string, start: number, end: number): Promise<QueueRemoveResponse | undefined> {
 		const options = {
-			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue`,
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/range`,
 			options: {
 				method: 'DELETE',
 				headers: { 'Content-Type': 'application/json' },
 				body: { start, end }
 			}
 		};
-		return this.fetch(options).then(() => undefined);
+		return this.fetch<QueueRemoveResponse>(options);
 	}
 
 	/**
@@ -684,7 +700,7 @@ export class Rest {
 	/**
 	 * Replay history
 	 */
-	public replayHistory(guildId: string, index: number, mode: 'play' | 'queue' | 'next'): Promise<void> {
+	public replayHistory(guildId: string, index: number, mode: 'play' | 'queue' | 'next'): Promise<HistoryReplayResponse | undefined> {
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/history/replay`,
 			options: {
@@ -693,7 +709,7 @@ export class Rest {
 				body: { index, mode }
 			}
 		};
-		return this.fetch(options).then(() => undefined);
+		return this.fetch<HistoryReplayResponse>(options);
 	}
 
 	/**
@@ -725,7 +741,7 @@ export class Rest {
 	/**
 	 * Set repeat mode
 	 */
-	public setRepeatMode(guildId: string, mode: 'off' | 'track' | 'queue'): Promise<void> {
+	public setRepeatMode(guildId: string, mode: 'off' | 'track' | 'queue'): Promise<LavalinkPlayer | undefined> {
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/repeat`,
 			options: {
@@ -734,7 +750,7 @@ export class Rest {
 				body: { mode }
 			}
 		};
-		return this.fetch(options).then(() => undefined);
+		return this.fetch<LavalinkPlayer>(options);
 	}
 
 	/**
