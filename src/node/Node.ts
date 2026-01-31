@@ -209,6 +209,11 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 
 			const server = new Websocket(url.toString(), { headers } as Websocket.ClientOptions);
 
+			// Register handlers BEFORE connection completes to avoid missing messages
+			server.once('upgrade', response => this.open(response));
+			server.on('error', error => this.error(error));
+			server.on('message', data => void this.message(data).catch(error => this.error(error as Error)));
+
 			const cleanup = () => {
 				server.onopen = null;
 				server.onclose = null;
@@ -257,10 +262,8 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 			throw connectError;
 		}
 
-		this.ws!.once('upgrade', response => this.open(response));
+		// close handler must be registered after connection to handle disconnects
 		this.ws!.once('close', (...args) => void this.close(...args));
-		this.ws!.on('error', error => this.error(error));
-		this.ws!.on('message', data => void this.message(data).catch(error => this.error(error as Error)));
 	}
 
 	/**
