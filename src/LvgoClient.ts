@@ -2,8 +2,8 @@ import { LvgoClientDefaults, VoiceState } from './Constants';
 import { Node } from './node/Node';
 import { Connector } from './connectors/Connector';
 import { Constructor, mergeDefault, TypedEventEmitter } from './Utils';
-import { Player } from './guild/Player';
-import { Rest, UpdatePlayerInfo } from './node/Rest';
+import { FilterOptions, Player } from './guild/Player';
+import { Rest } from './node/Rest';
 import { Connection } from './guild/Connection';
 
 export interface Structures {
@@ -110,6 +110,84 @@ export interface VoiceChannelOptions {
 	mute?: boolean;
 }
 
+/**
+ * Options for resuming a single session with full Voice Connection restoration
+ */
+export interface ResumeSessionOptions {
+	/**
+	 * GuildId of the session
+	 */
+	guildId: string;
+	/**
+	 * ChannelId of the voice channel to join
+	 */
+	channelId: string;
+	/**
+	 * ShardId for the websocket
+	 */
+	shardId: number;
+	/**
+	 * Player state to restore
+	 */
+	playerState?: {
+		track?: string | null;
+		position?: number;
+		paused?: boolean;
+		volume?: number;
+		filters?: FilterOptions;
+	};
+	/**
+	 * Whether to deafen the bot
+	 */
+	deaf?: boolean;
+	/**
+	 * Whether to mute the bot
+	 */
+	mute?: boolean;
+}
+
+/**
+ * Serialized session data for export/import functionality
+ */
+export interface SerializedSession {
+	/**
+	 * GuildId of the session
+	 */
+	guildId: string;
+	/**
+	 * ChannelId of the voice channel
+	 */
+	channelId: string;
+	/**
+	 * ShardId for the websocket
+	 */
+	shardId: number;
+	/**
+	 * Node name this player was connected to
+	 */
+	nodeName: string;
+	/**
+	 * Player state
+	 */
+	player: {
+		track: string | null;
+		position: number;
+		paused: boolean;
+		volume: number;
+		filters: FilterOptions;
+		partyId: string | null;
+	};
+	/**
+	 * Connection state
+	 */
+	connection: {
+		deaf: boolean;
+		mute: boolean;
+		sessionId: string | null;
+		region: string | null;
+	};
+}
+
 // Interfaces are not final, but types are, and therefore has an index signature
 // https://stackoverflow.com/a/64970740
 // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
@@ -149,6 +227,16 @@ export type LvgoClientEvents = {
      * @eventProperty
      */
 	'raw': [name: string, json: unknown];
+	/**
+	 * Emitted when a session is successfully resumed
+	 * @eventProperty
+	 */
+	'sessionResumed': [guildId: string, player: Player];
+	/**
+	 * Emitted when a session resume fails
+	 * @eventProperty
+	 */
+	'sessionResumeFailed': [guildId: string, error: Error];
 };
 
 /**
@@ -291,16 +379,150 @@ export class LvgoClient extends TypedEventEmitter<LvgoClientEvents> {
 	}
 
 	/**
-	 * Resume players from a list of player options
-	 * @param players An array of object that conforms to UpdatePlayerInfo
+	 * Resume sessions with full Voice Connection and Player restoration
+	 * @param sessions Array of session options to resume
+	 * @returns Promise that resolves to an array of resumed players
 	 */
-	public async resumeSessions(players: UpdatePlayerInfo[]): Promise<void> {
-		const promises = [];
-		for (const data of players) {
-			const node = this.getIdealNode();
-			if (!node) continue;
-			promises.push(node.rest.updatePlayer(data));
+	public async resumeSessions(sessions: ResumeSessionOptions[]): Promise<Player[]> {
+		const resumedPlayers: Player[] = [];
+
+		for (const session of sessions) {
+			try {
+				// Skip if already connected
+				if (this.connections.has(session.guildId)) {
+					this.emit('debug', 'LvgoClient', `[Resume] Guild ${session.guildId} already has a connection, skipping`);
+					continue;
+				}
+
+				// 1. Create Connection and join voice channel
+				const connection = new Connection(this, {
+					guildId: session.guildId,
+					channelId: session.channelId,
+					shardId: session.shardId,
+					deaf: session.deaf,
+					mute: session.mute
+				});
+				this.connections.set(session.guildId, connection);
+
+				try {
+					await connection.connect();
+				} catch (error) {
+					this.connections.delete(session.guildId);
+					this.emit('sessionResumeFailed', session.guildId, error as Error);
+					continue;
+				}
+
+				// 2. Get ideal node and create Player
+				const node = this.getIdealNode(connection);
+				if (!node) {
+					connection.disconnect();
+					this.connections.delete(session.guildId);
+					this.emit('sessionResumeFailed', session.guildId, new Error('No available nodes'));
+					continue;
+				}
+
+				const player = this.options.structures.player
+					? new this.options.structures.player(session.guildId, node)
+					: new Player(session.guildId, node);
+
+				// 3. Setup connection update listener
+				const onUpdate = (state: VoiceState) => {
+					if (state !== VoiceState.SESSION_READY) return;
+					void player.sendServerUpdate(connection);
+				};
+				connection.on('connectionUpdate', onUpdate);
+
+				// 4. Send initial server update to Lavalink
+				await player.sendServerUpdate(connection);
+				this.players.set(player.guildId, player);
+
+				// 5. Restore player state if provided
+				if (session.playerState) {
+					const { track, position, paused, volume, filters } = session.playerState;
+					await player.update({
+						track: track !== undefined ? { encoded: track } : undefined,
+						position,
+						paused,
+						volume,
+						filters
+					});
+				}
+
+				resumedPlayers.push(player);
+				this.emit('sessionResumed', session.guildId, player);
+				this.emit('debug', 'LvgoClient', `[Resume] Successfully resumed session for guild ${session.guildId}`);
+
+			} catch (error) {
+				this.emit('sessionResumeFailed', session.guildId, error as Error);
+				this.emit('error', 'LvgoClient', error as Error);
+			}
 		}
-		await Promise.allSettled(promises);
+
+		return resumedPlayers;
+	}
+
+	/**
+	 * Export all active sessions as serializable data
+	 * Useful for persisting session state before shutdown
+	 * @returns Array of serialized session data
+	 */
+	public exportSessions(): SerializedSession[] {
+		const sessions: SerializedSession[] = [];
+
+		for (const [guildId, player] of this.players) {
+			const connection = this.connections.get(guildId);
+			if (!connection || !connection.channelId) continue;
+
+			sessions.push({
+				guildId,
+				channelId: connection.channelId,
+				shardId: connection.shardId,
+				nodeName: player.node.name,
+				player: {
+					track: player.track,
+					position: player.position,
+					paused: player.paused,
+					volume: player.volume,
+					filters: { ...player.filters },
+					partyId: player.partyId
+				},
+				connection: {
+					deaf: connection.deafened,
+					mute: connection.muted,
+					sessionId: connection.sessionId,
+					region: connection.region
+				}
+			});
+		}
+
+		return sessions;
+	}
+
+	/**
+	 * Import and resume previously exported sessions
+	 * @param sessions Array of serialized session data from exportSessions()
+	 * @param options Import options
+	 * @returns Promise that resolves to array of resumed players
+	 */
+	public async importSessions(
+		sessions: SerializedSession[],
+		options: { preferOriginalNode?: boolean } = {}
+	): Promise<Player[]> {
+		const resumeOptions: ResumeSessionOptions[] = sessions.map(session => ({
+			guildId: session.guildId,
+			channelId: session.channelId,
+			shardId: session.shardId,
+			deaf: session.connection.deaf,
+			mute: session.connection.mute,
+			playerState: {
+				track: session.player.track,
+				position: session.player.position,
+				paused: session.player.paused,
+				volume: session.player.volume,
+				filters: session.player.filters
+			}
+		}));
+
+		return this.resumeSessions(resumeOptions);
 	}
 }

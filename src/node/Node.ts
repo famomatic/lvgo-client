@@ -404,9 +404,30 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 				playersWithoutData.push(player);
 		}
 
+		// For players without serverUpdate, try to request new voice state from Discord
+		const reconnectPromises = playersWithoutData.map(async player => {
+			const connection = this.manager.connections.get(player.guildId);
+			if (!connection || !connection.channelId) {
+				// No connection or channel, cannot reconnect
+				this.emit('debug', `[Resume] No connection data for guild ${player.guildId}, leaving channel`);
+				return this.manager.leaveVoiceChannel(player.guildId);
+			}
+
+			try {
+				// Request new voice connection from Discord
+				this.emit('debug', `[Resume] Attempting to reconnect player for guild ${player.guildId}`);
+				await connection.connect();
+				await player.resume();
+				this.emit('debug', `[Resume] Successfully reconnected player for guild ${player.guildId}`);
+			} catch (error) {
+				this.emit('debug', `[Resume] Failed to reconnect player for guild ${player.guildId}: ${(error as Error).message}`);
+				return this.manager.leaveVoiceChannel(player.guildId);
+			}
+		});
+
 		await Promise.allSettled([
 			...playersWithData.map(player => player.resume()),
-			...playersWithoutData.map(player => this.manager.leaveVoiceChannel(player.guildId))
+			...reconnectPromises
 		]);
 	}
 
