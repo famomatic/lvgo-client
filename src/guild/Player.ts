@@ -687,10 +687,11 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	public onPlayerEvent(json: TrackStartEvent | TrackEndEvent | TrackStuckEvent | TrackExceptionEvent | WebSocketClosedEvent | QueueUpdateEvent | HistoryUpdateEvent): void {
 		switch (json.type) {
 			case PlayerEventType.TRACK_START_EVENT:
-				if (this.track) this.track = json.track.encoded;
+				this.track = json.track.encoded;
 				this.emit('start', json);
 				break;
 			case PlayerEventType.TRACK_END_EVENT:
+				this.track = null;
 				this.emit('end', json);
 				break;
 			case PlayerEventType.TRACK_STUCK_EVENT:

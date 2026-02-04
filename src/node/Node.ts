@@ -396,7 +396,9 @@ export class Node extends TypedEventEmitter<NodeEvents> {
 		const playersWithData = [];
 		const playersWithoutData = [];
 
-		for (const player of this.manager.players.values()) {
+		const players = [ ...this.manager.players.values() ].filter(player => player.node.name === this.name);
+
+		for (const player of players) {
 			const serverUpdate = this.manager.connections.get(player.guildId)?.serverUpdate;
 			if (serverUpdate)
 				playersWithData.push(player);
@@ -436,7 +438,7 @@ export class Node extends TypedEventEmitter<NodeEvents> {
      * @internal
      */
 	public async movePlayers(): Promise<number> {
-		const players = [ ...this.manager.players.values() ];
+		const players = [ ...this.manager.players.values() ].filter(player => player.node.name === this.name);
 		const data = await Promise.allSettled(players.map(player => player.move()));
 		return data.filter(results => results.status === 'fulfilled').length;
 	}

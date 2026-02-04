@@ -797,8 +797,13 @@ export class Rest {
 			signal: abortController.signal
 		};
 
-		if (![ 'GET', 'HEAD' ].includes(method) && options.body)
-			finalFetchOptions.body = JSON.stringify(options.body);
+		if (![ 'GET', 'HEAD' ].includes(method) && options.body) {
+			try {
+				finalFetchOptions.body = JSON.stringify(options.body);
+			} catch {
+				throw new Error('Failed to serialize request body');
+			}
+		}
 
 		const request = await fetch(url.toString(), finalFetchOptions)
 			.finally(() => clearTimeout(timeout));

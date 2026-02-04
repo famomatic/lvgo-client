@@ -1,4 +1,4 @@
-import { LvgoClientDefaults, VoiceState } from './Constants';
+import { LvgoClientDefaults, VoiceState, State } from './Constants';
 import { Node } from './node/Node';
 import { Connector } from './connectors/Connector';
 import { Constructor, mergeDefault, TypedEventEmitter } from './Utils';
@@ -144,6 +144,10 @@ export interface ResumeSessionOptions {
 	 * Whether to mute the bot
 	 */
 	mute?: boolean;
+	/**
+	 * Preferred node name to resume on
+	 */
+	nodeName?: string;
 }
 
 /**
@@ -413,7 +417,13 @@ export class LvgoClient extends TypedEventEmitter<LvgoClientEvents> {
 				}
 
 				// 2. Get ideal node and create Player
-				const node = this.getIdealNode(connection);
+				let node: Node | undefined;
+				if (session.nodeName) {
+					node = this.nodes.get(session.nodeName);
+					if (node && node.state !== State.CONNECTED) node = undefined;
+				}
+				if (!node) node = this.getIdealNode(connection);
+
 				if (!node) {
 					connection.disconnect();
 					this.connections.delete(session.guildId);
@@ -520,7 +530,8 @@ export class LvgoClient extends TypedEventEmitter<LvgoClientEvents> {
 				paused: session.player.paused,
 				volume: session.player.volume,
 				filters: session.player.filters
-			}
+			},
+			nodeName: options.preferOriginalNode ? session.nodeName : undefined
 		}));
 
 		return this.resumeSessions(resumeOptions);
