@@ -525,4 +525,26 @@ export class LvgoClient extends TypedEventEmitter<LvgoClientEvents> {
 
 		return this.resumeSessions(resumeOptions);
 	}
+
+	/**
+	 * Sets the session resumption configuration for all connected nodes and updates the client options
+	 * @param resuming Whether resuming is enabled for this session or not
+	 * @param timeout Timeout to wait for resuming
+	 */
+	public async setResuming(resuming: boolean, timeout?: number): Promise<void> {
+		this.options.resume = resuming;
+		if (timeout) this.options.resumeTimeout = timeout;
+
+		await Promise.allSettled(
+			[ ...this.nodes.values() ].map(node => node.setResuming(resuming, timeout))
+		);
+	}
+
+	/**
+	 * Sets the library resumption configuration
+	 * @param enabled Whether to resume the players by doing it in the library side
+	 */
+	public setLibraryResumption(enabled: boolean): void {
+		this.options.resumeByLibrary = enabled;
+	}
 }

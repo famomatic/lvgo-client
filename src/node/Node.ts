@@ -11,7 +11,7 @@ import type {
 } from '../guild/Player';
 import type { NodeOption, LvgoClient, LvgoClientEvents } from '../LvgoClient';
 import { TypedEventEmitter, wait } from '../Utils';
-import { Rest } from './Rest';
+import { Rest, SessionInfo } from './Rest';
 
 export interface Ready {
 	op: OpCodes.READY;
@@ -435,10 +435,20 @@ export class Node extends TypedEventEmitter<NodeEvents> {
      * Tries to move the players to another node
      * @internal
      */
-	private async movePlayers(): Promise<number> {
+	public async movePlayers(): Promise<number> {
 		const players = [ ...this.manager.players.values() ];
 		const data = await Promise.allSettled(players.map(player => player.move()));
 		return data.filter(results => results.status === 'fulfilled').length;
+	}
+
+	/**
+	 * Sets the session resumption configuration
+	 * @param resuming Whether resuming is enabled for this session or not
+	 * @param timeout Timeout to wait for resuming
+	 * @returns Promise that resolves to the session info
+	 */
+	public setResuming(resuming: boolean, timeout?: number): Promise<SessionInfo | undefined> {
+		return this.rest.updateSession(resuming, timeout);
 	}
 
 	private cleanupWebsocket(): void {
