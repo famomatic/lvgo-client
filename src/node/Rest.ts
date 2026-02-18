@@ -108,6 +108,7 @@ export interface LavalinkPlayerVoice {
 	token: string;
 	endpoint: string;
 	sessionId: string;
+	channelId: string;
 	connected?: boolean;
 	ping?: number;
 }

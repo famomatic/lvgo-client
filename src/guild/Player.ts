@@ -247,6 +247,9 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 
 	public get data(): UpdatePlayerInfo {
 		const connection = this.node.manager.connections.get(this.guildId)!;
+		if (!connection.channelId) {
+			throw new Error(`[Voice] Missing channelId for guild ${this.guildId} (required for DAVE/E2EE voice updates)`);
+		}
 		return {
 			guildId: this.guildId,
 			playerOptions: {
@@ -259,7 +262,8 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 				voice: {
 					token: connection.serverUpdate!.token,
 					endpoint: connection.serverUpdate!.endpoint,
-					sessionId: connection.sessionId!
+					sessionId: connection.sessionId!,
+					channelId: connection.channelId
 				},
 				volume: this.volume
 			}
@@ -656,13 +660,17 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	 * @internal
 	 */
 	public async sendServerUpdate(connection: Connection): Promise<void> {
+		if (!connection.channelId) {
+			throw new Error(`[Voice] Missing channelId for guild ${this.guildId} (required for DAVE/E2EE voice updates)`);
+		}
 		const playerUpdate = {
 			guildId: this.guildId,
 			playerOptions: {
 				voice: {
 					token: connection.serverUpdate!.token,
 					endpoint: connection.serverUpdate!.endpoint,
-					sessionId: connection.sessionId!
+					sessionId: connection.sessionId!,
+					channelId: connection.channelId
 				}
 			}
 		};

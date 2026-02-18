@@ -153,8 +153,6 @@ Retrieves the current state of a player.
   "voice": { ... },
   "filters": { ... }
 }
-  "filters": { ... }
-}
 ```
 
 ### 2.2 Get Players (List)
@@ -184,6 +182,12 @@ Updates the player configuration. Sending a `track` object will **Stop** the cur
 ```json
 {
   "track": { "encoded": "..." }, // Optional: If set, REPLACES current track
+  "voice": {
+    "token": "...",
+    "endpoint": "...",
+    "sessionId": "...",
+    "channelId": "123456789012345678"
+  }, // Optional: partial update allowed
   "paused": true,
   "volume": 50,
   "position": 10000,
@@ -194,6 +198,12 @@ Updates the player configuration. Sending a `track` object will **Stop** the cur
 }
 ```
 - **Response**: `200 OK` (Updated Player Object)
+
+**Voice update rules (`voice`)**
+- `sessionId`, `token`, `endpoint`, `channelId` are all optional for PATCH.
+- Empty/missing fields are treated as "keep current value".
+- If `sessionId` changes, server reinitializes the voice connection (fresh DAVE/MLS session).
+- For DAVE/E2EE environments, `channelId` should be provided.
 
 ### 2.4 Destroy Player
 Disconnects voice, deletes the player, **Clears Queue**, and **Clears History**.
@@ -698,7 +708,7 @@ Strict implementation of the [Lavalink V4 REST API](https://lavalink.dev/api/res
     "connected": true,
     "ping": 42
   },
-  "voice": { "token": "...", "endpoint": "...", "sessionId": "..." },
+  "voice": { "token": "...", "endpoint": "...", "sessionId": "...", "channelId": "123456789012345678" },
   "filters": {}
 }
 ```
@@ -709,16 +719,22 @@ Strict implementation of the [Lavalink V4 REST API](https://lavalink.dev/api/res
 - **Body**:
 ```json
 {
-  "encodedTrack": "...", // or "identifier": "..."
+  "track": { "encoded": "..." }, // or "track": { "identifier": "..." }
   "position": 0,
   "endTime": 0,
   "volume": 100,
   "paused": false,
   "filters": { "volume": 1.0, "equalizer": [] },
-  "voice": { "token": "...", "endpoint": "...", "sessionId": "..." }
+  "voice": { "token": "...", "endpoint": "...", "sessionId": "...", "channelId": "123456789012345678" }
 }
 ```
 - **Response**: `200 OK` (Updated Player Object)
+
+**Voice update rules (`voice`)**
+- `sessionId`, `token`, `endpoint`, `channelId` are all optional for PATCH.
+- Empty/missing fields are treated as "keep current value".
+- If `sessionId` changes, server reinitializes the voice connection (fresh DAVE/MLS session).
+- For DAVE/E2EE environments, `channelId` should be provided.
 
 ### 9.9 Destroy Player
 - **DELETE** `/v4/sessions/{sessionId}/players/{guildId}`
