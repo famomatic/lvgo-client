@@ -83,6 +83,8 @@ export type NodeEvents = {
 	[K in keyof LvgoClientEvents]: LvgoClientEvents[K] extends [unknown, ...infer R] ? R : never;
 };
 
+const MAX_WS_MESSAGE_BYTES = 512 * 1024;
+
 /**
  * Represents a Lavalink node
  */
@@ -306,8 +308,19 @@ export class Node extends TypedEventEmitter<NodeEvents> {
      * @internal
      */
 	private async message(message: unknown): Promise<void> {
+		const raw = typeof message === 'string'
+			? message
+			: Buffer.isBuffer(message)
+				? message.toString('utf8')
+				: String(message);
+
+		if (Buffer.byteLength(raw, 'utf8') > MAX_WS_MESSAGE_BYTES) {
+			this.emit('debug', `[Socket] <- [${this.name}] : Ignored websocket payload larger than ${MAX_WS_MESSAGE_BYTES} bytes`);
+			return;
+		}
+
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-		const json: Ready | Stats | PlayerUpdate | TrackStartEvent | TrackEndEvent | TrackStuckEvent | TrackExceptionEvent | WebSocketClosedEvent = JSON.parse(message as string);
+		const json: Ready | Stats | PlayerUpdate | TrackStartEvent | TrackEndEvent | TrackStuckEvent | TrackExceptionEvent | WebSocketClosedEvent = JSON.parse(raw);
 		if (!json) return;
 		this.emit('raw', json);
 		switch (json.op) {

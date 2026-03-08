@@ -4,7 +4,7 @@ import type { Exception, PartyInfo, PlayerStats, Track, UpdatePlayerInfo, Update
 import { TypedEventEmitter } from '../Utils';
 import { Connection } from './Connection';
 
-export type TrackEndReason = 'finished' | 'loadFailed' | 'stopped' | 'replaced' | 'cleanup';
+export type TrackEndReason = 'finished' | 'loadFailed' | 'stopped' | 'stuck' | 'skipped' | 'replaced' | 'cleanup';
 export type PlayOptions = Omit<UpdatePlayerOptions, 'filters' | 'voice'>;
 export type ResumeOptions = Omit<UpdatePlayerOptions, 'track' | 'filters' | 'voice'>;
 
@@ -559,7 +559,7 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	 */
 	public async createParty(): Promise<PartyInfo | undefined> {
 		const party = await this.node.rest.createParty(this.guildId);
-		if (party) this.partyId = party.id;
+		if (party?.id) this.partyId = party.id;
 		return party;
 	}
 
@@ -570,7 +570,7 @@ export class Player extends TypedEventEmitter<PlayerEvents> {
 	 */
 	public async joinParty(partyId: string): Promise<PartyInfo | undefined> {
 		const party = await this.node.rest.joinParty(this.guildId, partyId);
-		if (party) this.partyId = party.id;
+		if (party?.id) this.partyId = party.id;
 		return party;
 	}
 

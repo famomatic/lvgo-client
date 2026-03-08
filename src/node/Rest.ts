@@ -5,11 +5,11 @@ import type { Node, NodeInfo, Stats } from './Node';
 export type Severity = 'common' | 'suspicious' | 'fault';
 
 export enum LoadType {
-	TRACK = 'TRACK',
-	PLAYLIST = 'PLAYLIST',
-	SEARCH = 'SEARCH',
-	EMPTY = 'EMPTY',
-	ERROR = 'ERROR'
+	TRACK = 'track',
+	PLAYLIST = 'playlist',
+	SEARCH = 'search',
+	EMPTY = 'empty',
+	ERROR = 'error'
 }
 
 export interface Track {
@@ -44,10 +44,18 @@ export interface Exception {
 }
 
 export interface LavalinkResponse {
-	type: LoadType;
+	loadType: LoadType;
+	data: Track | Playlist | Track[] | ExceptionRecord | null;
+	type?: LoadType;
 	playlistName?: string;
-	exception?: Exception;
-	tracks: Track[];
+	exception?: ExceptionRecord;
+	tracks?: Track[];
+}
+
+export interface ExceptionRecord {
+	message: string;
+	severity: Severity;
+	cause: string;
 }
 
 export interface MultiSearchResult {
@@ -75,7 +83,9 @@ export interface HealthResponse {
 	uptime: number;
 	memory: {
 		alloc: number;
+		totalAlloc?: number;
 		sys: number;
+		numGC?: number;
 	};
 }
 
@@ -97,11 +107,16 @@ export interface PartyMember {
 }
 
 export interface PartyInfo {
-	id: string;
-	hostGuildId: string;
-	hostSessionId: string;
-	members: PartyMember[];
-	syncEnabled: boolean;
+	id?: string;
+	hostGuildId?: string;
+	hostSessionId?: string;
+	members?: PartyMember[];
+	syncEnabled?: boolean;
+	ID?: string;
+	HostGuildID?: string;
+	HostSessionID?: string;
+	Members?: PartyMember[];
+	SyncEnabled?: boolean;
 }
 
 export interface LavalinkPlayerVoice {
@@ -153,8 +168,9 @@ export interface UpdatePlayerInfo {
 }
 
 export interface SessionInfo {
+	resuming?: boolean;
 	resumingKey?: string;
-	timeout: number;
+	timeout?: number;
 }
 
 export interface Queue {
@@ -170,19 +186,15 @@ export interface QueueResponse {
 
 export interface QueueRemoveResponse {
 	removed: number;
-	remaining: number;
-}
-
-export interface HistoryReplayResponse {
-	track: Track;
-	position: string;
 }
 
 export interface History {
 	total: number;
+	page: number;
 	tracks: ({ endTime: number } & Track)[];
-	endTime: number;
 }
+
+export type HistoryReplayMode = 'play' | 'queue' | 'next';
 
 export interface FetchOptions {
 	/**
@@ -196,7 +208,7 @@ export interface FetchOptions {
 		headers?: Record<string, string>;
 		params?: Record<string, string>;
 		method?: string;
-		body?: Record<string, unknown>;
+		body?: unknown;
 		[key: string]: unknown;
 	};
 }
@@ -207,6 +219,18 @@ interface FinalFetchOptions {
 	signal: AbortSignal;
 	body?: string;
 }
+
+const MAX_MULTI_SEARCH_SOURCES = 10;
+const QUEUE_BATCH_LIMIT = 500;
+const PAGINATION_MIN = 1;
+const PAGINATION_LIMIT_MAX = 100;
+const MIN_SLEEP_DURATION_MS = 1;
+const MAX_SLEEP_DURATION_MS = 86_400_000;
+const MIN_PLAYER_VOLUME = 0;
+const MAX_PLAYER_VOLUME = 1000;
+const MIN_FILTER_VOLUME = 0;
+const MAX_FILTER_VOLUME = 5;
+const MAX_EQUALIZER_BANDS = 15;
 
 /**
  * Wrapper around Lavalink REST API
@@ -244,6 +268,7 @@ export class Rest {
 	 * @returns A promise that resolves to a Lavalink response
 	 */
 	public resolve(identifier: string): Promise<LavalinkResponse | undefined> {
+		this.assertNonEmptyString(identifier, 'identifier');
 		const options = {
 			endpoint: '/tracks/resolve',
 			options: { params: { identifier }}
@@ -257,12 +282,14 @@ export class Rest {
 	 * @returns Promise that resolves to a track
 	 */
 	public decode(encoded: string): Promise<Track | undefined> {
+		this.assertNonEmptyString(encoded, 'encoded');
 		const options = {
 			endpoint: '/tracks/decode',
 			options: { params: { encoded }}
 		};
 		return this.fetch<Track>(options);
 	}
+
 
 	/**
 	 * Gets all the player with the specified sessionId
@@ -281,6 +308,7 @@ export class Rest {
 	 * @returns Promise that resolves to a Lavalink player
 	 */
 	public getPlayer(guildId: string): Promise<LavalinkPlayer | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}`,
 			options: {}
@@ -294,6 +322,7 @@ export class Rest {
 	 * @returns Promise that resolves to a Lavalink player
 	 */
 	public updatePlayer(data: UpdatePlayerInfo): Promise<LavalinkPlayer | undefined> {
+		this.assertUpdatePlayerPayload(data);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${data.guildId}`,
 			options: {
@@ -311,6 +340,7 @@ export class Rest {
 	 * @param guildId guildId where this player is
 	 */
 	public async destroyPlayer(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}`,
 			options: { method: 'DELETE' }
@@ -325,6 +355,8 @@ export class Rest {
 	 * @returns Promise that resolves to a Lavalink player
 	 */
 	public updateSession(resuming?: boolean, timeout?: number): Promise<SessionInfo | undefined> {
+		if (typeof timeout !== 'undefined' && (!Number.isInteger(timeout) || timeout < 0))
+			throw new RangeError('[Rest] timeout must be an integer >= 0');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}`,
 			options: {
@@ -355,6 +387,9 @@ export class Rest {
 	 * @returns Promise that resolves to search results from multiple sources
 	 */
 	public multiSearch(query: string, sources?: string[]): Promise<MultiSearchResult | undefined> {
+		this.assertNonEmptyString(query, 'query');
+		if (sources?.length && sources.length > MAX_MULTI_SEARCH_SOURCES)
+			throw new RangeError(`[Rest] sources length must be <= ${MAX_MULTI_SEARCH_SOURCES}`);
 		const params: Record<string, string> = { query };
 		if (sources?.length) params.sources = sources.join(',');
 		const options = {
@@ -369,6 +404,7 @@ export class Rest {
 	 * @param guildId Guild ID
 	 */
 	public async stopPlayer(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/stop`,
 			options: { method: 'POST' }
@@ -382,6 +418,7 @@ export class Rest {
 	 * @returns Promise that resolves to the player object
 	 */
 	public replayPlayer(guildId: string): Promise<LavalinkPlayer | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/replay`,
 			options: { method: 'POST' }
@@ -396,6 +433,8 @@ export class Rest {
 	 * @returns Promise that resolves to the new position
 	 */
 	public seekPlayer(guildId: string, position: number): Promise<number | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(position, 'position');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/seek`,
 			options: {
@@ -404,7 +443,7 @@ export class Rest {
 				body: { position }
 			}
 		};
-		return this.fetch(options);
+		return this.fetch<LavalinkPlayer>(options).then(player => player?.state.position);
 	}
 
 	/**
@@ -413,6 +452,7 @@ export class Rest {
 	 * @param enabled Whether to enable auto-shuffle
 	 */
 	public async setAutoShuffle(guildId: string, enabled: boolean): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/autoshuffle`,
 			options: {
@@ -430,6 +470,9 @@ export class Rest {
 	 * @param duration Duration in milliseconds
 	 */
 	public async setSleepTimer(guildId: string, duration: number): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		if (!Number.isInteger(duration) || duration < MIN_SLEEP_DURATION_MS || duration > MAX_SLEEP_DURATION_MS)
+			throw new RangeError(`[Rest] duration must be an integer between ${MIN_SLEEP_DURATION_MS} and ${MAX_SLEEP_DURATION_MS}`);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/sleep`,
 			options: {
@@ -446,6 +489,7 @@ export class Rest {
 	 * @param guildId Guild ID
 	 */
 	public async cancelSleepTimer(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/sleep`,
 			options: { method: 'DELETE' }
@@ -458,6 +502,7 @@ export class Rest {
 	 * @param guildId Guild ID
 	 */
 	public async playPrevious(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/previous`,
 			options: { method: 'POST' }
@@ -471,6 +516,7 @@ export class Rest {
 	 * @returns Promise that resolves to player stats
 	 */
 	public getPlayerStats(guildId: string): Promise<PlayerStats | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/stats`,
 			options: {}
@@ -484,11 +530,12 @@ export class Rest {
 	 * @returns Promise that resolves to the created party
 	 */
 	public createParty(guildId: string): Promise<PartyInfo | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/create`,
 			options: { method: 'POST' }
 		};
-		return this.fetch(options);
+		return this.fetch<PartyInfo>(options).then(party => this.normalizePartyInfo(party));
 	}
 
 	/**
@@ -498,6 +545,8 @@ export class Rest {
 	 * @returns Promise that resolves to the party info
 	 */
 	public joinParty(guildId: string, partyId: string): Promise<PartyInfo | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonEmptyString(partyId, 'partyId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party/join`,
 			options: {
@@ -506,7 +555,7 @@ export class Rest {
 				body: { partyId }
 			}
 		};
-		return this.fetch(options);
+		return this.fetch<PartyInfo>(options).then(party => this.normalizePartyInfo(party));
 	}
 
 	/**
@@ -514,6 +563,7 @@ export class Rest {
 	 * @param guildId Guild ID
 	 */
 	public async leaveParty(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party`,
 			options: { method: 'DELETE' }
@@ -527,11 +577,12 @@ export class Rest {
 	 * @returns Promise that resolves to the party info or undefined if not in a party
 	 */
 	public getParty(guildId: string): Promise<PartyInfo | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/party`,
 			options: {}
 		};
-		return this.fetch(options);
+		return this.fetch<PartyInfo>(options).then(party => this.normalizePartyInfo(party));
 	}
 
 	/**
@@ -564,6 +615,7 @@ export class Rest {
 	 * @returns Promise that resolves to guild stats
 	 */
 	public getGuildStats(guildId: string): Promise<GuildStats | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/stats/${guildId}`,
 			options: {}
@@ -588,6 +640,8 @@ export class Rest {
 	 * Get queue
 	 */
 	public getQueue(guildId: string, page = 1, limit = 50): Promise<Queue | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertPagination(page, limit);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue`,
 			options: {
@@ -601,6 +655,8 @@ export class Rest {
 	 * Add to queue
 	 */
 	public addQueue(guildId: string, tracks: Track[]): Promise<QueueResponse | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertQueueTracks(tracks);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue`,
 			options: {
@@ -616,6 +672,8 @@ export class Rest {
 	 * Prepend to queue
 	 */
 	public prependQueue(guildId: string, tracks: Track[]): Promise<QueueResponse | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertQueueTracks(tracks);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/prepend`,
 			options: {
@@ -628,9 +686,26 @@ export class Rest {
 	}
 
 	/**
+	 * Clear queue
+	 */
+	public clearQueue(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue`,
+			options: {
+				method: 'DELETE'
+			}
+		};
+		return this.fetch(options).then(() => undefined);
+	}
+
+	/**
 	 * Move track
 	 */
 	public moveQueue(guildId: string, from: number, to: number): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(from, 'from');
+		this.assertNonNegativeInteger(to, 'to');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/move`,
 			options: {
@@ -646,6 +721,9 @@ export class Rest {
 	 * Swap tracks
 	 */
 	public swapQueue(guildId: string, indexA: number, indexB: number): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(indexA, 'indexA');
+		this.assertNonNegativeInteger(indexB, 'indexB');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/swap`,
 			options: {
@@ -658,9 +736,24 @@ export class Rest {
 	}
 
 	/**
+	 * Shuffle queue
+	 */
+	public shuffleQueue(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		const options = {
+			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/shuffle`,
+			options: {
+				method: 'POST'
+			}
+		};
+		return this.fetch(options).then(() => undefined);
+	}
+
+	/**
 	 * Skip track
 	 */
 	public skipQueue(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/skip`,
 			options: {
@@ -674,6 +767,10 @@ export class Rest {
 	 * Remove range
 	 */
 	public removeQueue(guildId: string, start: number, end: number): Promise<QueueRemoveResponse | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(start, 'start');
+		this.assertNonNegativeInteger(end, 'end');
+		if (start > end) throw new RangeError('[Rest] start must be <= end');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/range`,
 			options: {
@@ -689,6 +786,8 @@ export class Rest {
 	 * Get history
 	 */
 	public getHistory(guildId: string, page = 1, limit = 50): Promise<History | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertPagination(page, limit);
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/history`,
 			options: {
@@ -701,7 +800,9 @@ export class Rest {
 	/**
 	 * Replay history
 	 */
-	public replayHistory(guildId: string, index: number, mode: 'play' | 'queue' | 'next'): Promise<HistoryReplayResponse | undefined> {
+	public replayHistory(guildId: string, index: number, mode: HistoryReplayMode): Promise<LavalinkPlayer | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(index, 'index');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/history/replay`,
 			options: {
@@ -710,13 +811,14 @@ export class Rest {
 				body: { index, mode }
 			}
 		};
-		return this.fetch<HistoryReplayResponse>(options);
+		return this.fetch<LavalinkPlayer>(options);
 	}
 
 	/**
 	 * Clear history
 	 */
 	public clearHistory(guildId: string): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/history`,
 			options: {
@@ -730,6 +832,8 @@ export class Rest {
 	 * Remove queue item by index
 	 */
 	public removeQueueItem(guildId: string, index: number): Promise<void> {
+		this.assertNonEmptyString(guildId, 'guildId');
+		this.assertNonNegativeInteger(index, 'index');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/queue/${index}`,
 			options: {
@@ -743,6 +847,7 @@ export class Rest {
 	 * Set repeat mode
 	 */
 	public setRepeatMode(guildId: string, mode: 'off' | 'track' | 'queue'): Promise<LavalinkPlayer | undefined> {
+		this.assertNonEmptyString(guildId, 'guildId');
 		const options = {
 			endpoint: `/sessions/${this.sessionId}/players/${guildId}/repeat`,
 			options: {
@@ -757,15 +862,70 @@ export class Rest {
 	/**
 	 * Invalidate cache
 	 */
-	public invalidateCache(identifier: string, scope: 'metadata' | 'content' | 'all'): Promise<void> {
+	public invalidateCache(identifier: string): Promise<void> {
+		this.assertNonEmptyString(identifier, 'identifier');
 		const options = {
 			endpoint: `/cache/${identifier}`,
 			options: {
-				method: 'DELETE',
-				params: { scope }
+				method: 'DELETE'
 			}
 		};
 		return this.fetch(options).then(() => undefined);
+	}
+
+	private normalizePartyInfo(party?: PartyInfo): PartyInfo | undefined {
+		if (!party) return undefined;
+		return {
+			id: party.id ?? party.ID,
+			hostGuildId: party.hostGuildId ?? party.HostGuildID,
+			hostSessionId: party.hostSessionId ?? party.HostSessionID,
+			members: party.members ?? party.Members ?? [],
+			syncEnabled: party.syncEnabled ?? party.SyncEnabled ?? true
+		};
+	}
+
+	private assertNonEmptyString(value: string, fieldName: string): void {
+		if (typeof value !== 'string' || value.trim().length === 0)
+			throw new TypeError(`[Rest] ${fieldName} must be a non-empty string`);
+	}
+
+	private assertNonNegativeInteger(value: number, fieldName: string): void {
+		if (!Number.isInteger(value) || value < 0)
+			throw new RangeError(`[Rest] ${fieldName} must be an integer >= 0`);
+	}
+
+	private assertPagination(page: number, limit: number): void {
+		if (!Number.isInteger(page) || page < PAGINATION_MIN)
+			throw new RangeError(`[Rest] page must be an integer >= ${PAGINATION_MIN}`);
+		if (!Number.isInteger(limit) || limit < PAGINATION_MIN || limit > PAGINATION_LIMIT_MAX)
+			throw new RangeError(`[Rest] limit must be an integer between ${PAGINATION_MIN} and ${PAGINATION_LIMIT_MAX}`);
+	}
+
+	private assertQueueTracks(tracks: Track[]): void {
+		if (!Array.isArray(tracks) || tracks.length === 0)
+			throw new TypeError('[Rest] tracks must be a non-empty array');
+		if (tracks.length > QUEUE_BATCH_LIMIT)
+			throw new RangeError(`[Rest] tracks length must be <= ${QUEUE_BATCH_LIMIT}`);
+	}
+
+	private assertUpdatePlayerPayload(data: UpdatePlayerInfo): void {
+		this.assertNonEmptyString(data.guildId, 'guildId');
+		const options = data.playerOptions;
+
+		if (typeof options.volume === 'number' && (options.volume < MIN_PLAYER_VOLUME || options.volume > MAX_PLAYER_VOLUME))
+			throw new RangeError(`[Rest] player volume must be between ${MIN_PLAYER_VOLUME} and ${MAX_PLAYER_VOLUME}`);
+
+		if (typeof options.position === 'number' && options.position < 0)
+			throw new RangeError('[Rest] position must be >= 0');
+
+		if (typeof options.endTime === 'number' && options.endTime < 0)
+			throw new RangeError('[Rest] endTime must be >= 0');
+
+		if (options.filters?.volume !== undefined && (options.filters.volume < MIN_FILTER_VOLUME || options.filters.volume > MAX_FILTER_VOLUME))
+			throw new RangeError(`[Rest] filter volume must be between ${MIN_FILTER_VOLUME} and ${MAX_FILTER_VOLUME}`);
+
+		if (options.filters?.equalizer && options.filters.equalizer.length > MAX_EQUALIZER_BANDS)
+			throw new RangeError(`[Rest] equalizer band count must be <= ${MAX_EQUALIZER_BANDS}`);
 	}
 
 	/**
@@ -833,6 +993,8 @@ export interface LavalinkRestError {
 	trace?: string;
 	message: string;
 	path: string;
+	retry_after?: number;
+	retryAfter?: number;
 }
 
 export class RestError extends Error {
@@ -841,9 +1003,18 @@ export class RestError extends Error {
 	public error: string;
 	public trace?: string;
 	public path: string;
+	public retryAfter?: number;
+	public isUnauthorized: boolean;
+	public isForbidden: boolean;
+	public isRateLimited: boolean;
 
-	constructor({ timestamp, status, error, trace, message, path }: LavalinkRestError) {
-		super(`Rest request failed with response code: ${status}${message ? ` | message: ${message}` : ''}`);
+	constructor({ timestamp, status, error, trace, message, path, retry_after, retryAfter }: LavalinkRestError) {
+		const hint = status === 403
+			? ' | hint: guildAuthorization may require a voice update before player operations'
+			: status === 429
+				? ' | hint: rate limit exceeded'
+				: '';
+		super(`Rest request failed with response code: ${status}${message ? ` | message: ${message}` : ''}${hint}`);
 		this.name = 'RestError';
 		this.timestamp = timestamp;
 		this.status = status;
@@ -851,6 +1022,10 @@ export class RestError extends Error {
 		this.trace = trace;
 		this.message = message;
 		this.path = path;
+		this.retryAfter = retryAfter ?? retry_after;
+		this.isUnauthorized = status === 401;
+		this.isForbidden = status === 403;
+		this.isRateLimited = status === 429;
 		Object.setPrototypeOf(this, new.target.prototype);
 	}
 }

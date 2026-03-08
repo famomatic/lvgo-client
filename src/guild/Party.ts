@@ -42,11 +42,11 @@ export class Party {
 	constructor(node: Node, guildId: string, data: PartyData) {
 		this.node = node;
 		this.guildId = guildId;
-		this.id = data.id;
-		this.hostGuildId = data.hostGuildId;
-		this.hostSessionId = data.hostSessionId;
-		this.syncEnabled = data.syncEnabled;
-		this.members = data.members;
+		this.id = data.id ?? '';
+		this.hostGuildId = data.hostGuildId ?? '';
+		this.hostSessionId = data.hostSessionId ?? '';
+		this.syncEnabled = data.syncEnabled ?? true;
+		this.members = data.members ?? [];
 	}
 
 	/**
@@ -70,8 +70,8 @@ export class Party {
 	public async refresh(): Promise<Party | undefined> {
 		const data = await this.node.rest.getParty(this.guildId);
 		if (data) {
-			this.syncEnabled = data.syncEnabled;
-			this.members = data.members;
+			this.syncEnabled = data.syncEnabled ?? this.syncEnabled;
+			this.members = data.members ?? this.members;
 			return this;
 		}
 		return undefined;

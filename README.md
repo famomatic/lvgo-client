@@ -54,9 +54,9 @@ const player = await lvgo.joinVoiceChannel({
 // Resolve a track
 const node = player.node;
 const result = await node.rest.resolve('ytsearch:Never Gonna Give You Up');
-if (!result || !result.tracks.length) return;
+if (!result || result.loadType !== 'search' || !Array.isArray(result.data) || !result.data.length) return;
 
-const track = result.tracks[0];
+const track = result.data[0];
 
 // Add to Server-Side Queue (This plays immediately if player is idle)
 await node.rest.addQueue(player.guildId, [track]);
@@ -82,11 +82,17 @@ await player.node.rest.moveQueue(player.guildId, 5, 0);
 // Swap tracks
 await player.node.rest.swapQueue(player.guildId, 2, 5);
 
+// Shuffle queue
+await player.node.rest.shuffleQueue(player.guildId);
+
 // Remove specific tracks by range
 await player.node.rest.removeQueue(player.guildId, 0, 1);
 
 // Remove a single track by index
 await player.node.rest.removeQueueItem(player.guildId, 3);
+
+// Clear queue
+await player.node.rest.clearQueue(player.guildId);
 ```
 
 ### History Operations
